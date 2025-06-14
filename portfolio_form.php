@@ -2,7 +2,7 @@
 include '../connection/config.php';
 session_start();
 
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     $_SESSION['status'] = "Unauthorized access.";
     $_SESSION['alert'] = "Error";
     $_SESSION['status-code'] = "error";
@@ -10,9 +10,11 @@ if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid']
     exit;
 }
 
+// Initialize variables for edit mode
 $editMode = false;
 $portfolio = [
     'id' => '',
+    'student_id' => '',
     'first_name' => '',
     'middle_name' => '',
     'last_name' => '',
@@ -24,13 +26,13 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
     $editMode = true;
     try {
         $stmt = $conn->prepare("
-            SELECT id, first_name, middle_name, last_name, section, date_submitted 
+            SELECT id, student_id, first_name, middle_name, last_name, section, date_submitted 
             FROM portfolios 
             WHERE id = :id AND created_by = :created_by
         ");
         $stmt->execute([
             'id' => $_GET['id'],
-            'created_by' => $_SESSION['auth_user']['userid']
+            'created_by' => $_SESSION['auth_user']['admin_id']
         ]);
         $portfolio = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$portfolio) {
@@ -48,6 +50,16 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
         header("Location: portfolio.php");
         exit;
     }
+}
+
+// Fetch students for static dropdown
+try {
+    $stmt = $conn->prepare("SELECT id, first_name, middle_name, last_name, stud_section FROM students_data ORDER BY last_name, first_name, COALESCE(middle_name, '')");
+    $stmt->execute();
+    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Error fetching students: " . $e->getMessage());
+    $students = [];
 }
 ?>
 
@@ -67,13 +79,14 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
     <link href="css/lib/helper.css" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet">
     <link href="endorsement-css/endorsement-moa.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         .form-container h2 {
             font-size: 16px;
             color: #444444;
             margin-bottom: 20px;
         }
-        .form-container input {
+        .form-container select, .form-container input {
             width: 100%;
             padding: 10px;
             margin: 10px 0;
@@ -136,6 +149,18 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
             white-space: nowrap;
             z-index: 10;
         }
+        .select2-container--default .select2-selection--single {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            height: 38px;
+            padding: 5px;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 28px;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 36px;
+        }
         @media (max-width: 768px) {
             .form-container {
                 margin: 20px;
@@ -166,19 +191,26 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
                     </div>
                 </div>
                 <h2><?php echo $editMode ? 'Edit Portfolio' : 'Add Portfolio'; ?></h2>
-                <form action="manage_portfolio.php" method="POST">
+                <form action="manage_portfolio.php" method="POST" id="portfolioForm">
                     <input type="hidden" name="action" value="<?php echo $editMode ? 'update' : 'create'; ?>">
                     <?php if ($editMode): ?>
                         <input type="hidden" name="id" value="<?php echo htmlspecialchars($portfolio['id']); ?>">
                     <?php endif; ?>
-                    <label for="first_name">First Name <span style="color: #8B0000;">*</span></label>
-                    <input type="text" name="first_name" id="first_name" value="<?php echo htmlspecialchars($portfolio['first_name']); ?>" placeholder="First Name" required maxlength="255">
-                    <label for="middle_name">Middle Name</label>
-                    <input type="text" name="middle_name" id="middle_name" value="<?php echo htmlspecialchars($portfolio['middle_name']); ?>" placeholder="Middle Name" maxlength="255">
-                    <label for="last_name">Last Name <span style="color: #8B0000;">*</span></label>
-                    <input type="text" name="last_name" id="last_name" value="<?php echo htmlspecialchars($portfolio['last_name']); ?>" placeholder="Last Name" required maxlength="255">
-                    <label for="section">Section <span style="color: #8B0000;">*</span></label>
-                    <input type="text" name="section" id="section" value="<?php echo htmlspecialchars($portfolio['section']); ?>" placeholder="Section" required maxlength="50">
+                    <label for="student_id">Student <span style="color: #8B0000;">*</span></label>
+                    <select name="student_id" id="student_id" required>
+                        <option value="">Select a student</option>
+                        <?php
+                        if ($students) {
+                            foreach ($students as $student) {
+                                $selected = ($editMode && $student['id'] == $portfolio['student_id']) ? 'selected' : '';
+                                $fullName = htmlspecialchars($student['last_name'] . ', ' . $student['first_name'] . ' ' . ($student['middle_name'] ?? '') . ' - ' . $student['stud_section']);
+                                echo "<option value=\"{$student['id']}\" $selected>$fullName</option>";
+                            }
+                        } else {
+                            echo '<option value="">Error loading students</option>';
+                        }
+                        ?>
+                    </select>
                     <label for="date_submitted">Date Submitted <span style="color: #8B0000;">*</span></label>
                     <input type="date" name="date_submitted" id="date_submitted" value="<?php echo htmlspecialchars($portfolio['date_submitted']); ?>" required>
                     <div class="action-buttons">
@@ -198,6 +230,53 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
     <script src="js/lib/preloader/pace.min.js"></script>
     <script src="js/lib/bootstrap.min.js"></script>
     <script src="js/lib/customAlert.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <!-- Comment out Select2 initialization to use static dropdown -->
+    <!--
+    <script>
+        $(document).ready(function() {
+            $('#student_id').select2({
+                placeholder: "Select a student",
+                allowClear: true,
+                ajax: {
+                    url: 'fetch_students.php',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            search: params.term || '',
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function(data, params) {
+                        params.page = params.page || 1;
+                        return {
+                            results: data.results.map(function(student) {
+                                return {
+                                    id: student.id,
+                                    text: student.last_name + ', ' + student.first_name + ' ' + (student.middle_name || '') + ' - ' + student.section
+                                };
+                            }),
+                            pagination: {
+                                more: data.pagination.more
+                            }
+                        };
+                    },
+                    error: function(jqXHR, textStatus, errorThrown) {
+                        console.error('Select2 AJAX error:', textStatus, errorThrown, jqXHR.responseText);
+                    },
+                    cache: true
+                },
+                minimumInputLength: 0,
+                sorter: function(data) {
+                    return data.sort(function(a, b) {
+                        return a.text.localeCompare(b.text);
+                    });
+                }
+            });
+        });
+    </script>
+    -->
     <?php 
     if (isset($_SESSION['status']) && $_SESSION['status'] != '') {
     ?>
@@ -214,24 +293,12 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
         $(document).ready(function() {
             // Client-side form validation
             $('#portfolioForm').on('submit', function(e) {
-                var firstName = $('#first_name').val().trim();
-                var lastName = $('#last_name').val().trim();
-                var section = $('#section').val().trim();
+                var studentId = $('#student_id').val();
                 var dateSubmitted = $('#date_submitted').val();
 
-                if (!firstName || firstName.length > 255) {
+                if (!studentId) {
                     e.preventDefault();
-                    customAlert("Error", "First name is required and must be 255 characters or less.", "error");
-                    return;
-                }
-                if (!lastName || lastName.length > 255) {
-                    e.preventDefault();
-                    customAlert("Error", "Last name is required and must be 255 characters or less.", "error");
-                    return;
-                }
-                if (!section || section.length > 50) {
-                    e.preventDefault();
-                    customAlert("Error", "Section is required and must be 50 characters or less.", "error");
+                    customAlert("Error", "Please select a student.", "error");
                     return;
                 }
                 if (!dateSubmitted) {

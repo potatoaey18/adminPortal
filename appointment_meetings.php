@@ -13,19 +13,19 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 // Redirect if not authenticated
-if (!isset($_SESSION['auth_user']['userid']) || !$_SESSION['auth_user']['userid']) {
-    error_log("Session auth_user[userid] not set, redirecting to index.php");
+if (!isset($_SESSION['auth_user']['admin_id']) || !$_SESSION['auth_user']['admin_id']) {
+    error_log("Session auth_user[admin_id] not set, redirecting to index.php");
     header('Location: index.php');
     exit;
 }
 
 // Fetch meetings from the database
-$userid = (int)$_SESSION['auth_user']['userid'];
-error_log("Fetching meetings for user ID: $userid");
+$admin_id = (int)$_SESSION['auth_user']['admin_id'];
+error_log("Fetching meetings for user ID: $admin_id");
 
 try {
     $stmt = $conn->prepare("SELECT * FROM meetings WHERE created_by = ? ORDER BY meeting_date DESC");
-    $stmt->execute([$userid]);
+    $stmt->execute([$admin_id]);
     $meetings = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log("Database error in appointment_meetings.php: " . $e->getMessage());

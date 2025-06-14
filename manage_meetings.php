@@ -6,8 +6,8 @@ ini_set('display_errors', 1);
 session_start();
 error_log("Reached manage_meetings.php");
 
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
-    error_log("Session auth_user[userid] not set, redirecting to index.php");
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
+    error_log("Session auth_user[admin_id] not set, redirecting to index.php");
     $_SESSION['status'] = "Unauthorized access.";
     $_SESSION['alert'] = "Error";
     $_SESSION['status-code'] = "error";
@@ -15,7 +15,7 @@ if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid']
     exit;
 }
 
-$userid = (int)$_SESSION['auth_user']['userid'];
+$admin_id = (int)$_SESSION['auth_user']['admin_id'];
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $transactionActive = false;
 
@@ -58,7 +58,7 @@ try {
 
         // Insert into meetings table
         $stmt = $conn->prepare("INSERT INTO meetings (created_by, meeting_type, link, passcode, meeting_date, meeting_time, agenda, portal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userid, $meeting_type, $link, $passcode ?: null, $meeting_date, $meeting_time, $agenda, $portal]);
+        $stmt->execute([$admin_id, $meeting_type, $link, $passcode ?: null, $meeting_date, $meeting_time, $agenda, $portal]);
         $conn->commit();
         $transactionActive = false;
         $_SESSION['status'] = "Meeting created successfully!";
@@ -106,7 +106,7 @@ try {
 
         // Update meetings table
         $stmt = $conn->prepare("UPDATE meetings SET meeting_type = ?, link = ?, passcode = ?, meeting_date = ?, meeting_time = ?, agenda = ?, portal = ? WHERE id = ? AND created_by = ?");
-        $stmt->execute([$meeting_type, $link, $passcode ?: null, $meeting_date, $meeting_time, $agenda, $portal, $id, $userid]);
+        $stmt->execute([$meeting_type, $link, $passcode ?: null, $meeting_date, $meeting_time, $agenda, $portal, $id, $admin_id]);
         $conn->commit();
         $transactionActive = false;
         $_SESSION['status'] = "Meeting updated successfully!";
@@ -123,14 +123,14 @@ try {
 
         // Verify meeting exists and belongs to user
         $stmt = $conn->prepare("SELECT id FROM meetings WHERE id = ? AND created_by = ?");
-        $stmt->execute([$id, $userid]);
+        $stmt->execute([$id, $admin_id]);
         if (!$stmt->fetch()) {
             throw new Exception("Meeting not found or you don't have permission to delete it.");
         }
 
         // Delete meeting
         $stmt = $conn->prepare("DELETE FROM meetings WHERE id = ? AND created_by = ?");
-        $stmt->execute([$id, $userid]);
+        $stmt->execute([$id, $admin_id]);
         $conn->commit();
         $transactionActive = false;
         $_SESSION['status'] = "Meeting deleted successfully!";

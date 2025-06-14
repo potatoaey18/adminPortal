@@ -4,13 +4,13 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 session_start();
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     header("Location: index.php");
     exit();
 }
 
 if (isset($_POST['upload'])) {
-    $adminID = $_SESSION['auth_user']['userid'];
+    $adminID = $_SESSION['auth_user']['admin_id'];
     $uploadDirectory = 'C:/xampp/htdocs/PUP/admin_file_images/'; // Absolute path for file operations
     $webPathPrefix = '/PUP/admin_file_images/'; // Relative path for web access
 
@@ -109,7 +109,7 @@ if (isset($_POST['upload'])) {
     }
 }
 
-$adminID = $_SESSION['auth_user']['userid'];
+$adminID = $_SESSION['auth_user']['admin_id'];
 try {
     $stmt = $conn->prepare("SELECT * FROM admin_account WHERE id = ?");
     $stmt->execute([$adminID]);

@@ -5,14 +5,14 @@ ini_set('display_errors', 1);
 
 session_start();
 
-if ($_SESSION['auth_user']['userid'] == 0) {
+if ($_SESSION['auth_user']['admin_id'] == 0) {
     echo "<script>window.location.href='index.php'</script>";
 } else {
     // Fetch admin's first name
-    $userid = $_SESSION['auth_user']['userid'];
-    $query = "SELECT first_name FROM admin_account WHERE id = :userid";
+    $admin_id = $_SESSION['auth_user']['admin_id'];
+    $query = "SELECT first_name FROM admin_account WHERE id = :admin_id";
     $stmt = $conn->prepare($query);
-    $stmt->bindParam(':userid', $userid, PDO::PARAM_INT);
+    $stmt->bindParam(':admin_id', $admin_id, PDO::PARAM_INT);
     $stmt->execute();
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     $first_name = isset($result['first_name']) ? $result['first_name'] : "Guest";

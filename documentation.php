@@ -4,7 +4,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 session_start();
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     echo "<script>window.location.href='index.php'</script>";
     exit;
 }
@@ -12,15 +12,21 @@ if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid']
 // Handle AJAX status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST['status'])) {
     try {
-        $stmt = $conn->prepare("UPDATE moa_applications SET status = :status WHERE id = :id");
+        // Validate status against allowed ENUM values
+        $validStatuses = ['checking_info', 'ulco_review', 'returned_to_coordinator', 'dean_vpaa_signature', 'signed_moa_retrieved', 'rejected'];
+        if (!in_array($_POST['status'], $validStatuses)) {
+            throw new Exception('Invalid status value');
+        }
+
+        $stmt = $conn->prepare("UPDATE new_moa_processing SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id");
         $stmt->execute([
             'status' => $_POST['status'],
             'id' => $_POST['id']
         ]);
         echo json_encode(['success' => true]);
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         error_log("Status update error: " . $e->getMessage());
-        echo json_encode(['success' => false, 'error' => 'Database error']);
+        echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
     }
     exit;
 }
@@ -40,103 +46,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
     <link href="css/lib/helper.css" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet">
     <style>
-        .search-container {
-            margin-bottom: 20px;
-        }
-        .search-box {
-            width: 75%;
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
-        .search-button {
-            padding: 8px 20px;
-            background-color: #8B0000;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .search-button:hover {
-            background-color: #700000;
-        }
-        .table-container {
-            width: 100%;
-            overflow-x: auto;
-            margin-bottom: 20px;
-        }
-        .company-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .company-table th {
-            background-color: #fff;
-            color: #700000;
-            text-align: center;
-            padding: 20px 50px;
-            min-width: 150px;
-            border: 2px solid #700000;
-            font-weight: 600;
-        }
-        .company-table td {
-            padding: 20px 50px;
-            border: 2px solid #700000;
-            text-align: center;
-            color: #000;
-        }
-        .company-table tr:nth-child(odd) {
-            background-color: #f2f2f2;
-        }
-        .download-status-btn, .download-btn {
-            background-color: #8B0000;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            margin: 10px 5px;
-        }
-        .download-status-btn:hover, .download-btn:hover {
-            background-color: #700000;
-        }
-        .page-header {
-            margin-bottom: 20px;
-        }
-        .page-title h1 {
-            font-size: 16px;
-            font-weight: bold;
-        }
-        .status-tabs {
-            margin-bottom: 20px;
-        }
-        .status-tab {
-            display: inline-block;
-            padding: 10px 20px;
-            margin-right: 5px;
-            background-color: #f2f2f2;
-            color: #8B0000;
-            cursor: pointer;
-            border-radius: 4px 4px 0 0;
-            font-weight: 600;
-        }
-        .status-tab.active {
-            background-color: #8B0000;
-            color: white;
-        }
-        .status-tab:hover {
-            background-color: #700000;
-            color: white;
-        }
-        .status-dropdown {
-            padding: 5px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-            font-size: 12px;
-        }
-        .button-container {
-            margin-bottom: 20px;
-        }
+        .search-container { margin-bottom: 20px; }
+        .search-box { width: 75%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        .search-button { padding: 8px 20px; background-color: #8B0000; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .search-button:hover { background-color: #700000; }
+        .table-container { width: 100%; overflow-x: auto; margin-bottom: 20px; }
+        .company-table { width: 100%; border-collapse: collapse; }
+        .company-table th { background-color: #fff; color: #700000; text-align: center; padding: 20px 50px; min-width: 150px; border: 2px solid #700000; font-weight: 600; }
+        .company-table td { padding: 20px 50px; border: 2px solid #700000; text-align: center; color: #000; }
+        .company-table tr:nth-child(odd) { background-color: #f2f2f2; }
+        .download-status-btn, .download-btn { background-color: #8B0000; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 10px 5px; }
+        .download-status-btn:hover, .download-btn:hover { background-color: #700000; }
+        .company-table td .download-btn { display: inline-block; text-align: center; min-width: 80px; text-decoration: none; }
+        .page-header { margin-bottom: 20px; }
+        .page-title h1 { font-size: 16px; font-weight: bold; }
+        .status-tabs { margin-bottom: 20px; }
+        .status-tab { display: inline-block; padding: 10px 20px; margin-right: 5px; background-color: #f2f2f2; color: #8B0000; cursor: pointer; border-radius: 4px 4px 0 0; font-weight: 600; }
+        .status-tab.active { background-color: #8B0000; color: white; }
+        .status-tab:hover { background-color: #700000; color: white; }
+        .status-dropdown { padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; }
+        .button-container { margin-bottom: 20px; }
+        .no-data { text-align: center; padding: 20px; color: #700000; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -150,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
                 </div>
             </div>
             <div class="search-container">
-                <input type="text" class="search-box" placeholder="Search by name or company..." id="userSearch" aria-label="Search MOA applications">
+                <input type="text" class="search-box" placeholder="Search by name, email, or company..." id="userSearch" aria-label="Search MOA applications">
                 <button class="search-button" aria-label="Search">Search</button>
             </div>
             <div class="button-container">
@@ -158,10 +88,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
             </div>
             <div class="status-tabs">
                 <?php
-                $statuses = ["For ULCO's Approval", "Returned by Coordinator", "For Signature", "For Retrieval"];
-                foreach ($statuses as $index => $status) {
-                    $tabId = 'tab' . $index;
-                    echo '<div class="status-tab" data-tab="' . $tabId . '" aria-label="Show ' . htmlspecialchars($status) . ' applications">' . htmlspecialchars($status) . '</div>';
+                // Statuses matching new_moa_processing ENUM
+                $statuses = [
+                    'checking_info' => 'Checking Info',
+                    'ulco_review' => 'ULCO Review',
+                    'returned_to_coordinator' => 'Returned to Coordinator',
+                    'dean_vpaa_signature' => 'Dean/VPAA Signature',
+                    'signed_moa_retrieved' => 'Signed MOA Retrieved',
+                    'rejected' => 'Rejected'
+                ];
+                foreach ($statuses as $enum => $display) {
+                    $tabId = 'tab' . array_search($enum, array_keys($statuses));
+                    echo '<div class="status-tab" data-tab="' . $tabId . '" aria-label="Show ' . htmlspecialchars($display) . ' applications">' . htmlspecialchars($display) . '</div>';
                 }
                 ?>
             </div>
@@ -171,19 +109,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
                     $applicationsByStatus = [];
                     $hasData = false;
 
-                    foreach ($statuses as $status) {
+                    foreach (array_keys($statuses) as $status) {
                         $stmt = $conn->prepare("
                             SELECT 
-                                id,
-                                CONCAT(filer_first_name, ' ', COALESCE(filer_middle_name, ''), ' ', filer_last_name) AS filer_name,
-                                filer_email,
-                                company_name,
-                                nature_of_business,
-                                company_address,
-                                date_filed,
-                                status
-                            FROM moa_applications
-                            WHERE status = :status
+                                nmp.id,
+                                CONCAT(s.first_name, ' ', COALESCE(s.middle_name, ''), ' ', s.last_name) AS filer_name,
+                                s.stud_email AS filer_email,
+                                nmp.company_name,
+                                nmp.nature_of_business,
+                                nmp.company_address,
+                                nmp.request_date AS date_filed,
+                                nmp.status,
+                                nmp.moa_document_path
+                            FROM new_moa_processing nmp
+                            LEFT JOIN students_data s ON nmp.student_id = s.id
+                            WHERE nmp.status = :status
                         ");
                         $stmt->execute(['status' => $status]);
                         $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -193,68 +133,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
                         }
                     }
 
-                    if (!$hasData) {
-                        // Dummy data for empty results
-                        $dummyData = [
-                            "For ULCO's Approval" => [
-                                [
-                                    'id' => 0,
-                                    'filer_name' => 'John Michael Doe',
-                                    'filer_email' => 'john.doe@example.com',
-                                    'company_name' => 'Tech Corp',
-                                    'nature_of_business' => 'IT Services',
-                                    'company_address' => '123 Tech St, City',
-                                    'date_filed' => '2025-05-01',
-                                    'status' => 'For ULCO\'s Approval'
-                                ]
-                            ],
-                            "Returned by Coordinator" => [
-                                [
-                                    'id' => 0,
-                                    'filer_name' => 'Jane Marie Smith',
-                                    'filer_email' => 'jane.smith@example.com',
-                                    'company_name' => 'Soft Solutions',
-                                    'nature_of_business' => 'Software Dev',
-                                    'company_address' => '456 Soft Ave, City',
-                                    'date_filed' => '2025-05-02',
-                                    'status' => 'Returned by Coordinator'
-                                ]
-                            ],
-                            "For Signature" => [
-                                [
-                                    'id' => 0,
-                                    'filer_name' => 'Alex Robert Johnson',
-                                    'filer_email' => 'alex.johnson@example.com',
-                                    'company_name' => 'Data Dynamics',
-                                    'nature_of_business' => 'Data Analytics',
-                                    'company_address' => '789 Data Rd, City',
-                                    'date_filed' => '2025-05-03',
-                                    'status' => 'For Signature'
-                                ]
-                            ],
-                            "For Retrieval" => [
-                                [
-                                    'id' => 0,
-                                    'filer_name' => 'Emily Ann Brown',
-                                    'filer_email' => 'emily.brown@example.com',
-                                    'company_name' => 'Cloud Innovations',
-                                    'nature_of_business' => 'Cloud Computing',
-                                    'company_address' => '101 Cloud Ln, City',
-                                    'date_filed' => '2025-05-04',
-                                    'status' => 'For Retrieval'
-                                ]
-                            ]
-                        ];
-                        $applicationsByStatus = $dummyData;
-                    }
-
                     // Render tables for each status
-                    foreach ($statuses as $index => $status) {
-                        $tabId = 'tab' . $index;
-                        $display = $index === 0 ? 'block' : 'none';
-                        echo '<div class="status-table" id="' . $tabId . '" style="display: ' . $display . ';">';
-                        echo '<button class="download-status-btn" data-status="' . htmlspecialchars($status) . '" id="downloadStatus' . $index . '" aria-label="Download ' . htmlspecialchars($status) . ' data">Download ' . htmlspecialchars($status) . '</button>';
-                        echo '<table class="company-table" id="statusTable' . $index . '">';
+                    foreach ($statuses as $enum => $display) {
+                        $tabId = 'tab' . array_search($enum, array_keys($statuses));
+                        $displayStyle = array_search($enum, array_keys($statuses)) === 0 ? 'block' : 'none';
+                        echo '<div class="status-table" id="' . $tabId . '" style="display: ' . $displayStyle . ';">';
+                        echo '<button class="download-status-btn" data-status="' . htmlspecialchars($enum) . '" id="downloadStatus' . array_search($enum, array_keys($statuses)) . '" aria-label="Download ' . htmlspecialchars($display) . ' data">Download ' . htmlspecialchars($display) . '</button>';
+                        echo '<table class="company-table" id="statusTable' . array_search($enum, array_keys($statuses)) . '">';
                         echo '<thead>';
                         echo '<tr>';
                         echo '<th>Filer\'s Name</th>';
@@ -264,115 +149,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
                         echo '<th>Address</th>';
                         echo '<th>Date Filed</th>';
                         echo '<th>Update Status</th>';
+                        echo '<th>Download MOA</th>';
                         echo '</tr>';
                         echo '</thead>';
                         echo '<tbody>';
-                        foreach ($applicationsByStatus[$status] as $app) {
-                            echo '<tr>';
-                            echo '<td>' . htmlspecialchars($app['filer_name'] ?? 'N/A') . '</td>';
-                            echo '<td>' . htmlspecialchars($app['filer_email'] ?? 'N/A') . '</td>';
-                            echo '<td>' . htmlspecialchars($app['company_name'] ?? 'N/A') . '</td>';
-                            echo '<td>' . htmlspecialchars($app['nature_of_business'] ?? 'N/A') . '</td>';
-                            echo '<td>' . htmlspecialchars($app['company_address'] ?? 'N/A') . '</td>';
-                            echo '<td>' . htmlspecialchars($app['date_filed'] ?? 'N/A') . '</td>';
-                            echo '<td>';
-                            if ($app['id'] == 0) {
-                                echo htmlspecialchars($app['status']);
-                            } else {
+                        if (!empty($applicationsByStatus[$enum])) {
+                            foreach ($applicationsByStatus[$enum] as $app) {
+                                echo '<tr>';
+                                echo '<td>' . htmlspecialchars($app['filer_name'] ?? 'N/A') . '</td>';
+                                echo '<td>' . htmlspecialchars($app['filer_email'] ?? 'N/A') . '</td>';
+                                echo '<td>' . htmlspecialchars($app['company_name'] ?? 'N/A') . '</td>';
+                                echo '<td>' . htmlspecialchars($app['nature_of_business'] ?? 'N/A') . '</td>';
+                                echo '<td>' . htmlspecialchars($app['company_address'] ?? 'N/A') . '</td>';
+                                echo '<td>' . htmlspecialchars($app['date_filed'] ?? 'N/A') . '</td>';
+                                echo '<td>';
                                 echo '<select class="status-dropdown" data-id="' . htmlspecialchars($app['id']) . '" aria-label="Update status for ' . htmlspecialchars($app['filer_name']) . '">';
-                                foreach ($statuses as $s) {
+                                foreach ($statuses as $s => $s_display) {
                                     $selected = $s === $app['status'] ? 'selected' : '';
-                                    echo '<option value="' . htmlspecialchars($s) . '" ' . $selected . '>' . htmlspecialchars($s) . '</option>';
+                                    echo '<option value="' . htmlspecialchars($s) . '" ' . $selected . '>' . htmlspecialchars($s_display) . '</option>';
                                 }
                                 echo '</select>';
+                                echo '</td>';
+                                echo '<td>';
+                                if (!empty($app['moa_document_path'])) {
+                                    echo '<a href="download_file.php?id=' . htmlspecialchars($app['id']) . '" class="download-btn" aria-label="Download MOA document for ' . htmlspecialchars($app['filer_name']) . '">Download</a>';
+                                } else {
+                                    echo 'No file';
+                                }
+                                echo '</td>';
+                                echo '</tr>';
                             }
-                            echo '</td>';
-                            echo '</tr>';
+                        } else {
+                            echo '<tr><td colspan="8" class="no-data">No applications found for this status.</td></tr>';
                         }
                         echo '</tbody>';
                         echo '</table>';
                         echo '</div>';
+                    }
+
+                    if (!$hasData) {
+                        echo '<div class="no-data">No MOA applications available.</div>';
                     }
                 } catch (PDOException $e) {
                     error_log("Database error: " . $e->getMessage());
-                    // Use dummy data on database error
-                    $dummyData = [
-                        [
-                            'id' => 0,
-                            'filer_name' => 'John Michael Doe',
-                            'filer_email' => 'john.doe@example.com',
-                            'company_name' => 'Tech Corp',
-                            'nature_of_business' => 'IT Services',
-                            'company_address' => '123 Tech St, City',
-                            'date_filed' => '2025-05-01',
-                            'status' => 'For ULCO\'s Approval'
-                        ],
-                        [
-                            'id' => 0,
-                            'filer_name' => 'Jane Marie Smith',
-                            'filer_email' => 'jane.smith@example.com',
-                            'company_name' => 'Soft Solutions',
-                            'nature_of_business' => 'Software Dev',
-                            'company_address' => '456 Soft Ave, City',
-                            'date_filed' => '2025-05-02',
-                            'status' => 'Returned by Coordinator'
-                        ],
-                        [
-                            'id' => 0,
-                            'filer_name' => 'Alex Robert Johnson',
-                            'filer_email' => 'alex.johnson@example.com',
-                            'company_name' => 'Data Dynamics',
-                            'nature_of_business' => 'Data Analytics',
-                            'company_address' => '789 Data Rd, City',
-                            'date_filed' => '2025-05-03',
-                            'status' => 'For Signature'
-                        ],
-                        [
-                            'id' => 0,
-                            'filer_name' => 'Emily Ann Brown',
-                            'filer_email' => 'emily.brown@example.com',
-                            'company_name' => 'Cloud Innovations',
-                            'nature_of_business' => 'Cloud Computing',
-                            'company_address' => '101 Cloud Ln, City',
-                            'date_filed' => '2025-05-04',
-                            'status' => 'For Retrieval'
-                        ]
-                    ];
-                    foreach ($statuses as $index => $status) {
-                        $tabId = 'tab' . $index;
-                        $display = $index === 0 ? 'block' : 'none';
-                        echo '<div class="status-table" id="' . $tabId . '" style="display: ' . $display . ';">';
-                        echo '<button class="download-status-btn" data-status="' . htmlspecialchars($status) . '" id="downloadStatus' . $index . '" aria-label="Download ' . htmlspecialchars($status) . ' data">Download ' . htmlspecialchars($status) . '</button>';
-                        echo '<table class="company-table" id="statusTable' . $index . '">';
-                        echo '<thead>';
-                        echo '<tr>';
-                        echo '<th>Filer\'s Name</th>';
-                        echo '<th>Email</th>';
-                        echo '<th>Company Name</th>';
-                        echo '<th>Nature of Business</th>';
-                        echo '<th>Address</th>';
-                        echo '<th>Date Filed</th>';
-                        echo '<th>Update Status</th>';
-                        echo '</tr>';
-                        echo '</thead>';
-                        echo '<tbody>';
-                        foreach ($dummyData as $app) {
-                            if ($app['status'] === $status) {
-                                echo '<tr>';
-                                echo '<td>' . htmlspecialchars($app['filer_name']) . '</td>';
-                                echo '<td>' . htmlspecialchars($app['filer_email']) . '</td>';
-                                echo '<td>' . htmlspecialchars($app['company_name']) . '</td>';
-                                echo '<td>' . htmlspecialchars($app['nature_of_business']) . '</td>';
-                                echo '<td>' . htmlspecialchars($app['company_address']) . '</td>';
-                                echo '<td>' . htmlspecialchars($app['date_filed']) . '</td>';
-                                echo '<td>' . htmlspecialchars($app['status']) . '</td>';
-                                echo '</tr>';
-                            }
-                        }
-                        echo '</tbody>';
-                        echo '</table>';
-                        echo '</div>';
-                    }
+                    echo '<div class="no-data">Error fetching data: ' . htmlspecialchars($e->getMessage()) . '</div>';
                 }
                 ?>
             </div>
@@ -433,7 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
                 var $dropdown = $(this);
 
                 $.ajax({
-                    url: 'admin_moa_applications.php',
+                    url: 'documentation.php',
                     type: 'POST',
                     data: { id: id, status: newStatus },
                     dataType: 'json',
@@ -484,8 +304,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
                     var cols = row.find('td');
                     var rowData = [];
 
-                    // Collect data from all columns
-                    for (var i = 0; i < cols.length; i++) {
+                    // Collect data from all columns except the last (Download MOA)
+                    for (var i = 0; i < cols.length - 1; i++) {
                         var text = cols.eq(i).find('select').length ? cols.eq(i).find('select').val() : cols.eq(i).text().trim();
                         text = text.replace(/"/g, '""');
                         if (text.includes(',') || text.includes('"') || text.includes('\n')) {
@@ -521,8 +341,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && isset($_POST
                         var cols = row.find('td');
                         var rowData = [];
 
-                        // Collect data from all columns
-                        for (var i = 0; i < cols.length; i++) {
+                        // Collect data from all columns except the last (Download MOA)
+                        for (var i = 0; i < cols.length - 1; i++) {
                             var text = cols.eq(i).find('select').length ? cols.eq(i).find('select').val() : cols.eq(i).text().trim();
                             text = text.replace(/"/g, '""');
                             if (text.includes(',') || text.includes('"') || text.includes('\n')) {

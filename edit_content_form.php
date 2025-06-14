@@ -3,7 +3,7 @@ include '../connection/config.php';
 session_start();
 
 // Check if admin is logged in
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     header("Location: index.php");
     exit;
 }
@@ -31,7 +31,7 @@ if ($id) {
     $field1 = $type === 'announcement' ? 'title' : 'question';
     $field2 = $type === 'announcement' ? 'content' : 'answer';
     $stmt = $conn->prepare("SELECT $field1, $field2 FROM $table WHERE id = ? AND created_by = ?");
-    $stmt->execute([$id, $_SESSION['auth_user']['userid']]);
+    $stmt->execute([$id, $_SESSION['auth_user']['admin_id']]);
     $data = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($data) {
         if ($type === 'announcement') {

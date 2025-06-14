@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 
 session_start();
 error_log("Session auth_user: " . print_r($_SESSION['auth_user'], true));
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     error_log("Redirecting to login due to invalid session");
     echo "<script>window.location.href='../pending/login.php'</script>";
     exit;

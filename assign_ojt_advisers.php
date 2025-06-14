@@ -1,43 +1,24 @@
 <?php
 include '../connection/config.php';
-error_reporting(E_ALL); // Enable all error reporting for debugging
-ini_set('display_errors', 1); // Display errors (remove in production)
+error_reporting(E_ALL);
+ini_set('display_errors', 1); // Remove in production
 
 session_start();
 
 // Redirect if not authenticated
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     header('Location: index.php');
     exit;
 }
 
-// Get admin data
-$adminID = $_SESSION['auth_user']['userid'];
-try {
-    $stmt = $conn->prepare("SELECT * FROM admin_account WHERE id = ?");
-    $stmt->execute([$adminID]);
-    $adminData = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$adminData) {
-        error_log("Admin data not found for ID: $adminID");
-        $_SESSION['alert'] = "Error";
-        $_SESSION['status'] = "Admin data not found.";
-        header('Location: index.php');
-        exit;
-    }
-} catch (PDOException $e) {
-    error_log("Database error fetching admin data: " . $e->getMessage());
-    $_SESSION['alert'] = "Error";
-    $_SESSION['status'] = "Database error: " . $e->getMessage();
-    header('Location: index.php');
-    exit;
-}
+$adminID = $_SESSION['auth_user']['admin_id'];
 
 // Handle course and section addition
 if (isset($_POST['addCourseSection'])) {
     $course = filter_input(INPUT_POST, 'course', FILTER_SANITIZE_STRING);
     $section = filter_input(INPUT_POST, 'section', FILTER_SANITIZE_STRING);
 
-    error_log("Add course request: Course=$course, Section=$section"); // Debug log
+    error_log("Add course request: Course=$course, Section=$section");
 
     if (empty($course) || empty($section)) {
         error_log("Add course error: Course or section missing.");
@@ -45,32 +26,21 @@ if (isset($_POST['addCourseSection'])) {
         $_SESSION['status'] = "Course and section are required.";
     } else {
         try {
-            // Check for duplicate course-section combination
             $stmt = $conn->prepare("SELECT COUNT(*) FROM courses_sections WHERE course = ? AND section = ?");
             $stmt->execute([$course, $section]);
             if ($stmt->fetchColumn() > 0) {
-                error_log("Add course error: Duplicate course-section combination. Course=$course, Section=$section");
+                error_log("Add course error: Duplicate course-section combination.");
                 $_SESSION['alert'] = "Error";
                 $_SESSION['status'] = "Course and section already exist.";
             } else {
-                // Insert new course and section
                 $stmt = $conn->prepare("INSERT INTO courses_sections (course, section) VALUES (?, ?)");
                 $stmt->execute([$course, $section]);
-
-                // Log the action
-                date_default_timezone_set('Asia/Manila');
-                $date = date('F / d l / Y');
-                $time = date('g:i A');
-                $logs = "Added course $course with section $section.";
-                $stmt = $conn->prepare("INSERT INTO admin_notification(userid, logs, logs_date, logs_time) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$adminID, $logs, $date, $time]);
-
                 error_log("Add course success: Course=$course, Section=$section");
                 $_SESSION['alert'] = "Success";
                 $_SESSION['status'] = "Course and section added successfully.";
             }
         } catch (PDOException $e) {
-            error_log("Add course error: Database error: " . $e->getMessage());
+            error_log("Add course error: " . $e->getMessage());
             $_SESSION['alert'] = "Error";
             $_SESSION['status'] = "Database error: " . $e->getMessage();
         }
@@ -85,40 +55,29 @@ if (isset($_POST['editCourseSection'])) {
     $course = filter_input(INPUT_POST, 'course', FILTER_SANITIZE_STRING);
     $section = filter_input(INPUT_POST, 'section', FILTER_SANITIZE_STRING);
 
-    error_log("Edit request: ID=$id, Course=$course, Section=$section"); // Debug log
+    error_log("Edit course request: ID=$id, Course=$course, Section=$section");
 
     if (empty($id) || empty($course) || empty($section)) {
-        error_log("Edit error: Missing required fields. ID=$id, Course=$course, Section=$section");
+        error_log("Edit course error: Missing required fields.");
         $_SESSION['alert'] = "Error";
         $_SESSION['status'] = "Course, section, and ID are required.";
     } else {
         try {
-            // Check for duplicate course-section combination (excluding current ID)
             $stmt = $conn->prepare("SELECT COUNT(*) FROM courses_sections WHERE course = ? AND section = ? AND id != ?");
             $stmt->execute([$course, $section, $id]);
             if ($stmt->fetchColumn() > 0) {
-                error_log("Edit error: Duplicate course-section combination. Course=$course, Section=$section, ID=$id");
+                error_log("Edit course error: Duplicate course-section combination.");
                 $_SESSION['alert'] = "Error";
                 $_SESSION['status'] = "Course and section already exist.";
             } else {
-                // Update course and section
                 $stmt = $conn->prepare("UPDATE courses_sections SET course = ?, section = ? WHERE id = ?");
                 $stmt->execute([$course, $section, $id]);
-
-                // Log the action
-                date_default_timezone_set('Asia/Manila');
-                $date = date('F / d l / Y');
-                $time = date('g:i A');
-                $logs = "Edited course $course with section $section.";
-                $stmt = $conn->prepare("INSERT INTO admin_notification(userid, logs, logs_date, logs_time) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$adminID, $logs, $date, $time]);
-
-                error_log("Edit success: Course=$course, Section=$section, ID=$id");
+                error_log("Edit course success: Course=$course, Section=$section, ID=$id");
                 $_SESSION['alert'] = "Success";
                 $_SESSION['status'] = "Course and section updated successfully.";
             }
         } catch (PDOException $e) {
-            error_log("Edit error: Database error: " . $e->getMessage());
+            error_log("Edit course error: " . $e->getMessage());
             $_SESSION['alert'] = "Error";
             $_SESSION['status'] = "Database error: " . $e->getMessage();
         }
@@ -127,104 +86,93 @@ if (isset($_POST['editCourseSection'])) {
     exit;
 }
 
-// Handle course and section deletion
-if (isset($_POST['deleteCourseSection'])) {
+// Handle AJAX delete request
+if (isset($_POST['ajaxDeleteSection'])) {
+    header('Content-Type: application/json');
     $id = filter_input(INPUT_POST, 'id', FILTER_SANITIZE_NUMBER_INT);
 
-    error_log("Delete request: ID=$id"); // Debug log
+    error_log("AJAX Delete request: ID=$id");
 
-    if (empty($id)) {
-        error_log("Delete error: Section ID is required.");
-        $_SESSION['alert'] = "Error";
-        $_SESSION['status'] = "Section ID is required.";
-    } else {
-        try {
-            $conn->beginTransaction();
-
-            // Get course and section for logging
-            $stmt = $conn->prepare("SELECT course, section FROM courses_sections WHERE id = ?");
-            $stmt->execute([$id]);
-            $sectionData = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$sectionData) {
-                error_log("Delete error: Section not found for ID=$id");
-                throw new Exception("Section not found.");
-            }
-            $course = $sectionData['course'];
-            $section = $sectionData['section'];
-
-            // Check if section has students
-            $stmt = $conn->prepare("SELECT COUNT(*) FROM students_data WHERE stud_course = ? AND stud_section = ?");
-            $stmt->execute([$course, $section]);
-            if ($stmt->fetchColumn() > 0) {
-                error_log("Delete error: Cannot delete section with enrolled students. Course=$course, Section=$section");
-                throw new Exception("Cannot delete section with enrolled students.");
-            }
-
-            // Remove from section_advisers
-            $stmt = $conn->prepare("DELETE FROM section_advisers WHERE section = ?");
-            $stmt->execute([$section]);
-
-            // Update coordinators_account
-            $stmt = $conn->prepare("UPDATE coordinators_account SET assigned_section = NULL WHERE assigned_section = ?");
-            $stmt->execute([$section]);
-            $stmt = $conn->prepare("UPDATE coordinators_account SET second_assigned_section = NULL WHERE second_assigned_section = ?");
-            $stmt->execute([$section]);
-
-            // Delete from courses_sections
-            $stmt = $conn->prepare("DELETE FROM courses_sections WHERE id = ?");
-            $stmt->execute([$id]);
-
-            // Log the action
-            date_default_timezone_set('Asia/Manila');
-            $date = date('F / d l / Y');
-            $time = date('g:i A');
-            $logs = "Deleted course $course with section $section.";
-            $stmt = $conn->prepare("INSERT INTO admin_notification(userid, logs, logs_date, logs_time) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$adminID, $logs, $date, $time]);
-
-            $conn->commit();
-            error_log("Delete success: Course=$course, Section=$section, ID=$id");
-            $_SESSION['alert'] = "Success";
-            $_SESSION['status'] = "Course and section deleted successfully.";
-        } catch (Exception $e) {
-            $conn->rollBack();
-            error_log("Delete error: " . $e->getMessage());
-            $_SESSION['alert'] = "Error";
-            $_SESSION['status'] = $e->getMessage();
-        }
-    }
-    header('Location: ' . $_SERVER['PHP_SELF']);
-    exit;
-}
-
-// Handle AJAX adviser assignment
-if (isset($_POST['ajaxSaveAssignment'])) {
-    header('Content-Type: application/json');
-    $section = filter_input(INPUT_POST, 'section', FILTER_SANITIZE_STRING);
-    $adviser_id = filter_input(INPUT_POST, 'adviser_id', FILTER_SANITIZE_NUMBER_INT);
-
-    error_log("AJAX Save Assignment: Section=$section, Adviser ID=$adviser_id"); // Debug log
-
-    if (empty($section) || empty($adviser_id)) {
-        error_log("AJAX Error: Section or adviser_id missing. Section=$section, Adviser ID=$adviser_id");
-        echo json_encode(['status' => 'error', 'message' => 'Section and adviser are required.']);
+    if (empty($id) || $id <= 0) {
+        error_log("AJAX Delete error: Invalid section ID.");
+        echo json_encode(['status' => 'error', 'message' => 'Valid section ID is required.']);
         exit;
     }
 
     try {
         $conn->beginTransaction();
 
-        // Check if adviser has less than 2 sections assigned
+        $stmt = $conn->prepare("SELECT section FROM courses_sections WHERE id = ?");
+        $stmt->execute([$id]);
+        $sectionData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$sectionData) {
+            error_log("AJAX Delete error: Section not found for ID=$id");
+            throw new Exception("Section not found.");
+        }
+        $section = $sectionData['section'];
+
+        // Clear assignments
+        $stmt = $conn->prepare("UPDATE coordinators_account SET assigned_section = NULL WHERE assigned_section = ?");
+        $stmt->execute([$section]);
+        $stmt = $conn->prepare("UPDATE coordinators_account SET second_assigned_section = NULL WHERE second_assigned_section = ?");
+        $stmt->execute([$section]);
+        error_log("Cleared assignments for section: $section");
+
+        // Delete section
+        $stmt = $conn->prepare("DELETE FROM courses_sections WHERE id = ?");
+        $stmt->execute([$id]);
+        error_log("Deleted section: ID=$id");
+
+        $conn->commit();
+        error_log("AJAX Delete success: Section=$section, ID=$id");
+        echo json_encode(['status' => 'success', 'message' => 'Section deleted successfully.']);
+    } catch (PDOException $e) {
+        $conn->rollBack();
+        error_log("AJAX Delete error: " . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()]);
+    } catch (Exception $e) {
+        $conn->rollBack();
+        error_log("AJAX Delete error: " . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// Handle AJAX adviser assignment (for both dropdown and modal)
+if (isset($_POST['ajaxSaveAssignment'])) {
+    header('Content-Type: application/json');
+    $section = filter_input(INPUT_POST, 'section', FILTER_SANITIZE_STRING);
+    $adviser_id = filter_input(INPUT_POST, 'adviser_id', FILTER_SANITIZE_NUMBER_INT);
+
+    error_log("AJAX Save Assignment: Section=$section, Adviser ID=$adviser_id");
+
+    if (empty($section) || empty($adviser_id) || $adviser_id <= 0) {
+        error_log("AJAX Error: Invalid section or adviser_id.");
+        echo json_encode(['status' => 'error', 'message' => 'Valid section and adviser ID are required.']);
+        exit;
+    }
+
+    try {
+        $conn->beginTransaction();
+
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM courses_sections WHERE section = ?");
+        $stmt->execute([$section]);
+        if ($stmt->fetchColumn() === 0) {
+            error_log("AJAX Error: Section not found: $section");
+            echo json_encode(['status' => 'error', 'message' => 'Section not found.']);
+            exit;
+        }
+
         $stmt = $conn->prepare("
-            SELECT assigned_section, second_assigned_section 
+            SELECT id, assigned_section, second_assigned_section 
             FROM coordinators_account 
-            WHERE id = ?
+            WHERE id = ? AND verify_status = 'Verified' 
         ");
         $stmt->execute([$adviser_id]);
         $coordinator = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$coordinator) {
-            error_log("AJAX Error: Coordinator not found for ID: $adviser_id");
-            echo json_encode(['status' => 'error', 'message' => 'Adviser not found.']);
+            error_log("AJAX Error: Verified coordinator not found for ID=$adviser_id");
+            echo json_encode(['status' => 'error', 'message' => 'Verified coordinator not found']);
             exit;
         }
 
@@ -237,52 +185,36 @@ if (isset($_POST['ajaxSaveAssignment'])) {
         ]));
 
         if ($assignedCount >= 2 && !$isAssignedToThisSection) {
-            error_log("AJAX Error: Adviser ID $adviser_id already assigned to two sections.");
-            echo json_encode(['status' => 'error', 'message' => 'Adviser is already assigned to two sections.']);
+            error_log("AJAX Error: Adviser ID=$adviser_id already assigned to two sections");
+            echo json_encode(['status' => 'error', 'message' => 'Adviser is already assigned to two sections']);
             exit;
         }
 
-        // Update section_advisers table
-        $stmt = $conn->prepare("SELECT COUNT(*) FROM section_advisers WHERE section = ?");
-        $stmt->execute([$section]);
-        $exists = $stmt->fetchColumn();
-
-        if ($exists) {
-            $stmt = $conn->prepare("UPDATE section_advisers SET adviser_id = ? WHERE section = ?");
-            $stmt->execute([$adviser_id, $section]);
-        } else {
-            $stmt = $conn->prepare("INSERT INTO section_advisers (section, adviser_id) VALUES (?, ?)");
-            $stmt->execute([$section, $adviser_id]);
-        }
-
-        // Update coordinators_account table
-        if ($coordinator['assigned_section'] == $section) {
+        // Clear existing assignment if necessary
+        if ($coordinator['assigned_section'] === $section) {
             $stmt = $conn->prepare("UPDATE coordinators_account SET assigned_section = NULL WHERE id = ?");
             $stmt->execute([$adviser_id]);
-        } elseif ($coordinator['second_assigned_section'] == $section) {
+            error_log("Cleared assigned_section for Adviser ID=$adviser_id");
+        } elseif ($coordinator['second_assigned_section'] === $section) {
             $stmt = $conn->prepare("UPDATE coordinators_account SET second_assigned_section = NULL WHERE id = ?");
             $stmt->execute([$adviser_id]);
+            error_log("Cleared second_assigned_section for Adviser ID=$adviser_id");
         }
 
+        // Assign to available slot
         if (empty($coordinator['assigned_section'])) {
             $stmt = $conn->prepare("UPDATE coordinators_account SET assigned_section = ? WHERE id = ?");
             $stmt->execute([$section, $adviser_id]);
+            error_log("Set assigned_section: Section=$section, Adviser ID=$adviser_id");
         } elseif (empty($coordinator['second_assigned_section'])) {
             $stmt = $conn->prepare("UPDATE coordinators_account SET second_assigned_section = ? WHERE id = ?");
             $stmt->execute([$section, $adviser_id]);
+            error_log("Set second_assigned_section: Section=$section, Adviser ID=$adviser_id");
         }
 
-        // Log the action
-        date_default_timezone_set('Asia/Manila');
-        $date = date('F / d l / Y');
-        $time = date('g:i A');
-        $logs = "Assigned adviser ID $adviser_id to section $section.";
-        $stmt = $conn->prepare("INSERT INTO admin_notification(userid, logs, logs_date, logs_time) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$adminID, $logs, $date, $time]);
-
         $conn->commit();
-        error_log("AJAX Success: Adviser ID $adviser_id assigned to section $section");
-        echo json_encode(['status' => 'success', 'message' => 'Adviser assigned successfully.']);
+        error_log("AJAX Success: Adviser ID=$adviser_id assigned to section $section");
+        echo json_encode(['status' => 'success', 'message' => 'Adviser assigned successfully']);
     } catch (PDOException $e) {
         $conn->rollBack();
         error_log("AJAX Error: Database error: " . $e->getMessage());
@@ -295,19 +227,12 @@ if (isset($_POST['ajaxSaveAssignment'])) {
     exit;
 }
 
-// Fetch sections, courses, and student counts
+// Fetch sections and courses
 try {
-    $stmt = $conn->prepare("
-        SELECT cs.id, cs.course, cs.section, COUNT(sd.student_id) as total_students 
-        FROM courses_sections cs
-        LEFT JOIN students_data sd ON cs.course = sd.stud_course AND cs.section = sd.stud_section
-        GROUP BY cs.id, cs.course, cs.section 
-        ORDER BY cs.course ASC, cs.section ASC
-    ");
+    $stmt = $conn->prepare("SELECT id, course, section FROM courses_sections ORDER BY course ASC, section ASC");
     $stmt->execute();
     $sections = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Group sections by course
     $courses = [];
     foreach ($sections as $section) {
         $course = $section['course'];
@@ -322,7 +247,7 @@ try {
     $_SESSION['status'] = "Database error: " . $e->getMessage();
 }
 
-// Fetch advisers from coordinators_account
+// Fetch advisers
 try {
     $stmt = $conn->prepare("
         SELECT id, CONCAT(first_name, ' ', last_name) as full_name, assigned_section, second_assigned_section
@@ -333,7 +258,6 @@ try {
     $stmt->execute();
     $advisers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Calculate assigned sections for each adviser
     $adviserAssignments = [];
     foreach ($advisers as $adviser) {
         $assignedCount = 0;
@@ -354,15 +278,15 @@ try {
     $_SESSION['status'] = "Database error: " . $e->getMessage();
 }
 
-// Fetch current adviser assignments from section_advisers
-try {
-    $stmt = $conn->prepare("SELECT section, adviser_id FROM section_advisers");
-    $stmt->execute();
-    $currentAssignments = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-} catch (PDOException $e) {
-    error_log("Database error fetching assignments: " . $e->getMessage());
-    $_SESSION['alert'] = "Error";
-    $_SESSION['status'] = "Database error: " . $e->getMessage();
+// Determine current assignments
+$currentAssignments = [];
+foreach ($advisers as $adviser) {
+    if (!empty($adviser['assigned_section'])) {
+        $currentAssignments[$adviser['assigned_section']] = $adviser['id'];
+    }
+    if (!empty($adviser['second_assigned_section'])) {
+        $currentAssignments[$adviser['second_assigned_section']] = $adviser['id'];
+    }
 }
 ?>
 
@@ -377,10 +301,12 @@ try {
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link href="css/lib/font-awesome.min.css" rel="stylesheet">
     <link href="css/lib/themify-icons.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Use CDN with local fallback for Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <link href="css/lib/helper.css" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <!-- Use CDN with local fallback for SweetAlert2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet" integrity="sha384-7j+Nj+ZX7eWDA8rPQzK0ZY3vDoS7V+BIYuwZ6kS+xfnkr0G+RT1M4HrwE3N2k00+" crossorigin="anonymous">
     <style>
         .content-wrap {
             height: 80%;
@@ -479,6 +405,12 @@ try {
         .edit-btn:hover {
             background-color: #0056b3;
         }
+        .edit-adviser-btn {
+            background-color: #28a745;
+        }
+        .edit-adviser-btn:hover {
+            background-color: #218838;
+        }
         .delete-btn {
             background-color: #dc3545;
         }
@@ -531,7 +463,6 @@ try {
                     <h1>Assign OJT Advisers</h1><br>
                 </div>
             </div>
-            <!-- Form to add course and section -->
             <div class="add-course-section">
                 <form method="POST" action="" id="addCourseSectionForm">
                     <input type="text" name="course" placeholder="Course (e.g., DIT)" required>
@@ -556,7 +487,6 @@ try {
                             <thead>
                                 <tr>
                                     <th>Section</th>
-                                    <th>Total Students</th>
                                     <th>Assigned Adviser</th>
                                     <th>Actions</th>
                                 </tr>
@@ -565,11 +495,11 @@ try {
                                 <?php foreach ($courseSections as $section): ?>
                                     <tr data-section-id="<?php echo htmlspecialchars($section['id']); ?>">
                                         <td><?php echo htmlspecialchars($section['section']); ?></td>
-                                        <td><?php echo htmlspecialchars($section['total_students']); ?></td>
                                         <td>
-                                            <form class="assignment-form" method="POST" action="">
+                                            <form class="assignment-form">
                                                 <input type="hidden" name="section" value="<?php echo htmlspecialchars($section['section']); ?>">
-                                                <select name="adviser_id" class="adviser-select">
+                                                <select name="adviser_id" class="adviser-select" 
+                                                        <?php echo isset($currentAssignments[$section['section']]) ? 'disabled' : ''; ?>>
                                                     <option value="">Select Adviser</option>
                                                     <?php foreach ($advisers as $adviser): 
                                                         $assignedCount = $adviserAssignments[$adviser['id']]['assigned_count'];
@@ -577,21 +507,24 @@ try {
                                                         $isDisabled = ($assignedCount >= 2 && !$isAssignedToThisSection) ? 'disabled' : '';
                                                     ?>
                                                         <option value="<?php echo htmlspecialchars($adviser['id']); ?>" 
-                                                            <?php echo (isset($currentAssignments[$section['section']]) && $currentAssignments[$section['section']] == $adviser['id']) ? 'selected' : ''; ?>
-                                                            <?php echo $isDisabled; ?>
-                                                            class="adviser-option">
+                                                                <?php echo (isset($currentAssignments[$section['section']]) && $currentAssignments[$section['section']] == $adviser['id']) ? 'selected' : ''; ?>
+                                                                <?php echo $isDisabled; ?>
+                                                                class="adviser-option">
                                                             <?php echo htmlspecialchars($adviser['full_name'] . " (" . $assignedCount . "/2 sections)"); ?>
                                                         </option>
                                                     <?php endforeach; ?>
                                                 </select>
-                                                <button type="button" class="action-btn save-btn mt-2">Save</button>
                                             </form>
                                         </td>
                                         <td>
+                                            <!-- Ensure data attributes are properly set -->
                                             <button type="button" class="action-btn edit-btn" 
                                                     data-id="<?php echo htmlspecialchars($section['id']); ?>"
                                                     data-course="<?php echo htmlspecialchars($section['course']); ?>"
                                                     data-section="<?php echo htmlspecialchars($section['section']); ?>">Edit</button>
+                                            <button type="button" class="action-btn edit-adviser-btn" 
+                                                    data-section="<?php echo htmlspecialchars($section['section']); ?>"
+                                                    data-adviser-id="<?php echo isset($currentAssignments[$section['section']]) ? htmlspecialchars($currentAssignments[$section['section']]) : ''; ?>">Edit Adviser</button>
                                             <button type="button" class="action-btn delete-btn" 
                                                     data-id="<?php echo htmlspecialchars($section['id']); ?>">Delete</button>
                                         </td>
@@ -605,7 +538,7 @@ try {
         </div>
     </div>
 
-    <!-- Edit Modal -->
+    <!-- Edit Course/Section Modal -->
     <div class="modal fade" id="editSectionModal" tabindex="-1" aria-labelledby="editSectionModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -634,208 +567,124 @@ try {
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Edit Adviser Modal -->
+    <div class="modal fade" id="editAdviserModal" tabindex="-1" aria-labelledby="editAdviserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editAdviserModalLabel">Edit Adviser Assignment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="editAdviserForm">
+                    <div class="modal-body">
+                        <input type="hidden" name="section" id="editAdviserSection">
+                        <div class="mb-3">
+                            <label for="editAdviserSelect" class="form-label">Select Adviser</label>
+                            <select class="form-control" name="adviser_id" id="editAdviserSelect" required>
+                                <option value="">Select Adviser</option>
+                                <?php foreach ($advisers as $adviser): 
+                                    $assignedCount = $adviserAssignments[$adviser['id']]['assigned_count'];
+                                ?>
+                                    <option value="<?php echo htmlspecialchars($adviser['id']); ?>" 
+                                            data-assigned-count="<?php echo $assignedCount; ?>">
+                                        <?php echo htmlspecialchars($adviser['full_name'] . " (" . $assignedCount . "/2 sections)"); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Use CDN with local fallback for scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js" integrity="sha256-2Pmvv0kuTBOenSvLm6bvfBSSHrUJ+3A7x6P5Ebd07/g=" crossorigin="anonymous"></script>
+    <!-- Fallback for jQuery -->
+    <script>window.jQuery || document.write('<script src="js/lib/jquery-3.7.0.min.js"><\/script>')</script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js" integrity="sha384-Y6p+zYkS3H5Qk3ngH6+a+JHLzTqT0DHMp6O0AEBi0l1bW0l2H3q0Yz3Y3d1k5k0+" crossorigin="anonymous"></script>
+    <!-- Fallback for SweetAlert2 -->
+    <script>typeof Swal === 'undefined' && document.write('<script src="js/lib/sweetalert2.min.js"><\/script>')</script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+    <!-- Fallback for Bootstrap -->
+    <script>typeof bootstrap === 'undefined' && document.write('<script src="js/lib/bootstrap.bundle.min.js"><\/script>')</script>
     <script>
         $(document).ready(function() {
-            console.log('Document ready, jQuery version:', $.fn.jquery); // Debug log
+            console.log('Document ready, jQuery version:', $.fn.jquery, 'Bootstrap:', typeof bootstrap, 'SweetAlert2:', typeof Swal);
 
-            // Debug adviser data
-            console.log("Advisers loaded: <?php echo json_encode($advisers, JSON_HEX_QUOT | JSON_HEX_APOS); ?>");
-
-            // Sidebar dropdown
-            const $dropdownToggles = $(".dropdown-toggle");
-            $dropdownToggles.each(function() {
-                const $parent = $(this).parent();
-                const $dropdownContent = $(this).siblings(".dropdown-content");
-                const $arrow = $(this).find(".dropdown-arrow");
-                if ($parent.hasClass("active")) {
-                    $dropdownContent.css("display", "block");
-                    if ($arrow.length) $arrow.text("▲");
+            // Adviser selection (dropdown)
+            $(document).on('change', '.adviser-select', function() {
+                if ($(this).is(':disabled')) {
+                    console.log('Ignoring change event for disabled select');
+                    return;
                 }
+                console.log('Adviser select change event triggered');
+                saveAdviserAssignment($(this));
             });
-            $dropdownToggles.click(function(e) {
+
+            // Edit adviser button
+            $(document).on('click', '.edit-adviser-btn', function(e) {
                 e.preventDefault();
-                e.stopPropagation();
-                const $parent = $(this).parent();
-                const $dropdownContent = $(this).siblings(".dropdown-content");
-                const $arrow = $(this).find(".dropdown-arrow");
-                const isActive = $parent.hasClass("active");
-                if (isActive) {
-                    $parent.removeClass("active");
-                    $dropdownContent.slideUp(200);
-                    if ($arrow.length) $arrow.text("▼");
-                } else {
-                    $parent.addClass("active");
-                    $dropdownContent.slideDown(200);
-                    if ($arrow.length) $arrow.text("▲");
-                }
-            });
+                console.log('Edit adviser button clicked:', $(this).data()); // Debug log
+                const section = $(this).data('section');
+                const currentAdviserId = $(this).data('adviser-id');
 
-            // Profile dropdown
-            $(".avatar-trigger").click(function(e) {
-                e.stopPropagation();
-                $(this).siblings(".dropdown-menu").toggleClass("show");
-            });
-            $(document).click(function() {
-                $(".dropdown-menu").removeClass("show");
-            });
-
-            // Search functionality across all tables
-            $("#sectionSearch").on("keyup", function() {
-                var value = $(this).val().toLowerCase().trim();
-                $(".company-table tbody tr").each(function() {
-                    var sectionText = $(this).find('td:first').text().toLowerCase();
-                    $(this).toggle(sectionText.indexOf(value) > -1);
-                });
-            });
-
-            // Sort each course table by section
-            $('table.company-table').each(function() {
-                const table = $(this);
-                const tbody = table.find('tbody');
-                const rows = tbody.find('tr').toArray();
-                rows.sort(function(a, b) {
-                    const aValue = $(a).find('td').eq(0).text().toLowerCase();
-                    const bValue = $(b).find('td').eq(0).text().toLowerCase();
-                    return aValue.localeCompare(bValue);
-                });
-                tbody.empty();
-                $.each(rows, function(index, row) {
-                    tbody.append(row);
-                });
-            });
-
-            // Handle adviser assignment save
-            $(document).on('click', '.save-btn', function(e) {
-                e.preventDefault();
-                const $button = $(this);
-                if ($button.prop('disabled')) {
-                    console.log('Save button disabled, preventing double submission');
-                    return; // Prevent multiple submissions
-                }
-                console.log('Save button clicked'); // Debug log
-                const $form = $button.closest('form');
-                const $select = $form.find('.adviser-select');
-                const section = $form.find('input[name="section"]').val();
-                const adviser_id = $select.val();
-
-                if (!adviser_id) {
+                if (!section) {
+                    console.error('Missing section data');
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
-                        text: 'Please select an adviser.',
+                        text: 'Missing section data.',
                         confirmButtonColor: '#3085d6'
                     });
                     return;
                 }
 
-                Swal.fire({
-                    title: 'Are you sure?',
-                    text: "Do you want to assign this adviser to the selected section?",
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#3085d6',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: 'Yes, assign it!'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $button.prop('disabled', true).text('Saving...');
-                        $.ajax({
-                            url: '<?php echo $_SERVER['PHP_SELF']; ?>',
-                            type: 'POST',
-                            data: {
-                                ajaxSaveAssignment: true,
-                                section: section,
-                                adviser_id: adviser_id
-                            },
-                            dataType: 'json',
-                            success: function(response) {
-                                console.log('AJAX Success:', response); // Debug log
-                                $button.prop('disabled', false).text('Save');
-                                Swal.fire({
-                                    icon: response.status,
-                                    title: response.status.charAt(0).toUpperCase() + response.status.slice(1),
-                                    text: response.message,
-                                    confirmButtonColor: '#3085d6'
-                                });
-                                if (response.status === 'success') {
-                                    location.reload();
-                                }
-                            },
-                            error: function(xhr, status, error) {
-                                $button.prop('disabled', false).text('Save');
-                                console.error('AJAX Error:', {
-                                    status: status,
-                                    error: error,
-                                    responseText: xhr.responseText
-                                }); // Detailed error logging
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Error',
-                                    text: 'Failed to save assignment: ' + (xhr.responseText || error),
-                                    confirmButtonColor: '#3085d6'
-                                });
-                            }
-                        });
-                    }
-                });
-            });
-
-            // Handle edit button click
-            $(document).on('click', '.edit-btn', function(e) {
-                e.preventDefault(); // Prevent default behavior
-                console.log('Edit button clicked'); // Debug log
-                const $button = $(this);
-                const id = $button.data('id');
-                const course = $button.data('course');
-                const section = $button.data('section');
-
-                console.log('Edit data:', { id, course, section }); // Debug log
-
-                if (!id || !course || !section) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Missing section data. Please try again.',
-                        confirmButtonColor: '#3085d6'
-                    });
-                    return;
-                }
-
-                $('#editSectionId').val(id);
-                $('#editCourse').val(course);
-                $('#editSection').val(section);
+                $('#editAdviserSection').val(section);
+                $('#editAdviserSelect').val(currentAdviserId || '');
 
                 try {
-                    const modal = new bootstrap.Modal(document.getElementById('editSectionModal'), {
-                        keyboard: false
-                    });
+                    const modal = new bootstrap.Modal(document.getElementById('editAdviserModal'));
                     modal.show();
-                } catch (error) {
-                    console.error('Modal Error:', error); // Debug log
+                } catch (err) {
+                    console.error('Modal initialization failed:', err);
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
-                        text: 'Failed to open edit modal: ' + error.message,
+                        text: 'Failed to open modal. Check console for details.',
                         confirmButtonColor: '#3085d6'
                     });
                 }
             });
 
-            // Handle delete button click
+            // Edit adviser form submission
+            $('#editAdviserForm').on('submit', function(e) {
+                e.preventDefault();
+                console.log('Edit adviser form submitted');
+                saveAdviserAssignment($(this).find('select[name="adviser_id"]'));
+                try {
+                    bootstrap.Modal.getInstance(document.getElementById('editAdviserModal')).hide();
+                } catch (err) {
+                    console.error('Modal hide failed:', err);
+                }
+            });
+
+            // Delete button
             $(document).on('click', '.delete-btn', function(e) {
-                e.preventDefault(); // Prevent default behavior
-                console.log('Delete button clicked'); // Debug log
+                e.preventDefault();
+                console.log('Delete button clicked:', $(this).data()); // Debug log
                 const id = $(this).data('id');
 
-                if (!id) {
-                    console.error('Delete Error: Missing section ID');
+                if (!id || id <= 0) {
+                    console.error('Invalid section ID:', id);
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
-                        text: 'Missing section ID. Please try again.',
+                        text: 'Invalid section ID.',
                         confirmButtonColor: '#3085d6'
                     });
                     return;
@@ -851,109 +700,229 @@ try {
                     confirmButtonText: 'Yes, delete it!'
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        console.log('Creating delete form for ID:', id); // Debug log
-                        const $form = $('<form>', {
-                            'method': 'POST',
-                            'action': '<?php echo $_SERVER['PHP_SELF']; ?>',
-                            'html': `<input type="hidden" name="deleteCourseSection" value="1">
-                                     <input type="hidden" name="id" value="${id}">`
-                        }).appendTo('body');
-                        console.log('Form created:', $form[0]); // Debug log
-                        $form.submit();
+                        console.log('Confirmed deletion for ID:', id);
+                        $.ajax({
+                            url: window.location.href,
+                            type: 'POST',
+                            data: {
+                                ajaxDeleteSection: true,
+                                id: id
+                            },
+                            dataType: 'json',
+                            beforeSend: function() {
+                                console.log('Sending delete AJAX request for ID:', id);
+                            },
+                            success: function(response) {
+                                console.log('AJAX Delete Success:', response);
+                                Swal.fire({
+                                    icon: response.status,
+                                    title: response.status.charAt(0).toUpperCase() + response.status.slice(1),
+                                    text: response.message,
+                                    confirmButtonColor: '#3085d6'
+                                });
+                                if (response.status === 'success') {
+                                    location.reload();
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('AJAX Delete Error:', { status, error, responseText: xhr.responseText });
+                                let errorMsg = 'Failed to delete section.';
+                                try {
+                                    const jsonResponse = JSON.parse(xhr.responseText);
+                                    errorMsg += ' ' + (jsonResponse.message || xhr.responseText);
+                                } catch (e) {
+                                    errorMsg += ' ' + (xhr.responseText || error);
+                                }
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: errorMsg,
+                                    confirmButtonColor: '#3085d6'
+                                });
+                            }
+                        });
                     }
                 });
             });
 
-            // Form validation for add/edit forms
+            // Save adviser assignment (used by both dropdown and modal)
+            function saveAdviserAssignment($select) {
+                const $form = $select.closest('form');
+                const section = $form.find('input[name="section"]').val() || $('#editAdviserSection').val();
+                const adviser_id = $select.val();
+
+                console.log('Saving adviser assignment:', { section, adviser_id });
+
+                if (!section || !adviser_id || adviser_id === "") {
+                    console.warn('Missing section or adviser_id');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Warning',
+                        text: 'Please select a valid adviser.',
+                        confirmButtonColor: '#3085d6'
+                    });
+                    return;
+                }
+
+                $.ajax({
+                    url: window.location.href,
+                    type: 'POST',
+                    data: {
+                        ajaxSaveAssignment: true,
+                        section: section,
+                        adviser_id: adviser_id
+                    },
+                    dataType: 'json',
+                    beforeSend: function() {
+                        console.log('Sending AJAX request for assignment');
+                        $select.prop('disabled', true);
+                    },
+                    success: function(response) {
+                        console.log('AJAX Success:', response);
+                        Swal.fire({
+                            icon: response.status,
+                            title: response.status.charAt(0).toUpperCase() + response.status.slice(1),
+                            text: response.message,
+                            confirmButtonColor: '#3085d6'
+                        });
+                        if (response.status === 'success') {
+                            location.reload();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('AJAX Error:', { status, error, responseText: xhr.responseText });
+                        let errorMsg = 'Failed to save assignment.';
+                        try {
+                            const jsonResponse = JSON.parse(xhr.responseText);
+                            errorMsg += ' ' + (jsonResponse.message || xhr.responseText);
+                        } catch (e) {
+                            errorMsg += ' ' + (xhr.responseText || error);
+                        }
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: errorMsg,
+                            confirmButtonColor: '#3085d6'
+                        });
+                    },
+                    complete: function() {
+                        $select.prop('disabled', false);
+                        console.log('AJAX request completed');
+                    }
+                });
+            }
+
+            // Edit course/section button
+            $(document).on('click', '.edit-btn', function(e) {
+                e.preventDefault();
+                console.log('Edit course/section button clicked:', $(this).data()); // Debug log
+                const id = $(this).data('id');
+                const course = $(this).data('course');
+                const section = $(this).data('section');
+
+                if (!id || !course || !section) {
+                    console.error('Missing section data:', { id, course, section });
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Missing section data.',
+                        confirmButtonColor: '#3085d6'
+                    });
+                    return;
+                }
+
+                $('#editSectionId').val(id);
+                $('#editCourse').val(course);
+                $('#editSection').val(section);
+
+                try {
+                    const modal = new bootstrap.Modal(document.getElementById('editSectionModal'));
+                    modal.show();
+                } catch (err) {
+                    console.error('Modal initialization failed:', err);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Failed to open modal. Check console for details.',
+                        confirmButtonColor: '#3085d6'
+                    });
+                }
+            });
+
+            // Search functionality
+            $("#sectionSearch").on("keyup", function() {
+                const value = $(this).val().toLowerCase().trim();
+                $(".company-table tbody tr").each(function() {
+                    const sectionText = $(this).find('td:first').text().toLowerCase();
+                    $(this).toggle(sectionText.includes(value));
+                });
+            });
+
+            // Sort tables
+            $('table.company-table').each(function() {
+                const table = $(this);
+                const tbody = table.find('tbody');
+                const rows = tbody.find('tr').toArray();
+                rows.sort(function(a, b) {
+                    const aValue = $(a).find('td').eq(0).text().toLowerCase();
+                    const bValue = $(b).find('td').eq(0).text().toLowerCase();
+                    return aValue.localeCompare(bValue);
+                });
+                tbody.empty();
+                $.each(rows, function(index, row) {
+                    tbody.append(row);
+                });
+            });
+
+            // Form validation
             function validateForm($form) {
-                const course = $form.find('input[name="course"]').val().trim();
-                const section = $form.find('input[name="section"]').val().trim();
-                if (!course || !section) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Both course and section fields are required.',
-                        confirmButtonColor: '#3085d6'
-                    });
-                    return false;
-                }
-                if (course.length > 100) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Course name cannot exceed 100 characters.',
-                        confirmButtonColor: '#3085d6'
-                    });
-                    return false;
-                }
-                if (section.length > 50) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Section name cannot exceed 50 characters.',
-                        confirmButtonColor: '#3085d6'
-                    });
-                    return false;
+                const course = $form.find('input[name="course"]').val()?.trim();
+                const section = $form.find('input[name="section"]').val()?.trim();
+                if (course !== undefined && section !== undefined) {
+                    if (!course || !section) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Both course and section fields are required.',
+                            confirmButtonColor: '#3085d6'
+                        });
+                        return false;
+                    }
+                    if (course.length > 100) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Course name cannot exceed 100 characters.',
+                            confirmButtonColor: '#3085d6'
+                        });
+                        return false;
+                    }
+                    if (section.length > 50) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Section name cannot exceed 50 characters.',
+                            confirmButtonColor: '#3085d6'
+                        });
+                        return false;
+                    }
                 }
                 return true;
             }
 
-            $('#addCourseSectionForm').on('submit', function(e) {
+            $('#addCourseSectionForm, #editCourseSectionForm').on('submit', function(e) {
                 if (!validateForm($(this))) {
                     e.preventDefault();
                 }
             });
 
-            $('#editCourseSectionForm').on('submit', function(e) {
-                if (!validateForm($(this))) {
-                    e.preventDefault();
-                }
-            });
-
-            // Auto-logout
-            var adminId = <?php echo $_SESSION['auth_user']['userid']; ?>;
-            var logoutTimeout;
-            function startLogoutTimer() {
-                logoutTimeout = setTimeout(function() {
-                    $.ajax({
-                        type: 'POST',
-                        url: 'admin_update_status_AutoLogOut.php',
-                        data: { userid: adminId },
-                        success: function() {
-                            window.location.href = 'index.php';
-                        },
-                        error: function(xhr, status, error) {
-                            console.error('Auto-logout error:', error);
-                        }
-                    });
-                }, 360000);
-            }
-            function resetLogoutTimer() {
-                clearTimeout(logoutTimeout);
-                startLogoutTimer();
-            }
-            startLogoutTimer();
-            document.addEventListener('mousemove', resetLogoutTimer);
-            document.addEventListener('keydown', resetLogoutTimer);
-
-            function profile() {
-                window.location.href = 'view_admin_profile.php';
-            }
-            function settings() {
-                window.location.href = 'admin_settings.php';
-            }
-            function logout() {
-                window.location.href = 'admin_logout.php';
-            }
-
-            // SweetAlert2 for session alerts
+            // Session alerts
             <?php if (isset($_SESSION['status']) && $_SESSION['status'] != ''): ?>
                 Swal.fire({
                     icon: '<?php echo strtolower($_SESSION['alert']); ?>',
                     title: '<?php echo $_SESSION['alert']; ?>',
                     text: '<?php echo $_SESSION['status']; ?>',
-                    confirmButtonColor: '#3085d6',
-                    confirmButtonText: 'OK'
+                    confirmButtonColor: '#3085d6'
                 });
                 <?php
                 unset($_SESSION['status']);

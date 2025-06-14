@@ -4,8 +4,8 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 session_start();
-error_log("Session userid: " . ($_SESSION['auth_user']['userid'] ?? 'Not set'));
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+error_log("Session admin_id: " . ($_SESSION['auth_user']['admin_id'] ?? 'Not set'));
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     echo "<script>window.location.href='index.php'</script>";
     exit;
 }
@@ -262,8 +262,8 @@ if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid']
             // Verify jQuery is loaded
             console.log("jQuery version:", $.fn.jquery);
 
-            // Pass userid from PHP session to JavaScript
-            var adminId = '<?php echo htmlspecialchars($_SESSION['auth_user']['userid'] ?? ''); ?>';
+            // Pass admin_id from PHP session to JavaScript
+            var adminId = '<?php echo htmlspecialchars($_SESSION['auth_user']['admin_id'] ?? ''); ?>';
             console.log("Admin ID: ", adminId);
 
             // Search functionality

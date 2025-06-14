@@ -2,7 +2,7 @@
 include '../connection/config.php';
 session_start();
 
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     $_SESSION['status'] = "Unauthorized access.";
     $_SESSION['alert'] = "Error";
     $_SESSION['status-code'] = "error";
@@ -12,27 +12,102 @@ if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid']
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $action = $_POST['action'];
+        $action = $_POST['action'] ?? '';
+        $admin_id = $_SESSION['auth_user']['admin_id'];
+
         if ($action === 'create') {
+            $student_id = filter_var($_POST['student_id'] ?? '', FILTER_VALIDATE_INT);
+            $date_submitted = $_POST['date_submitted'] ?? '';
+
+            error_log("Create endorsement: student_id=$student_id, date_submitted=$date_submitted");
+
+            // Validate inputs
+            if (!$student_id || empty($date_submitted)) {
+                $_SESSION['status'] = "Invalid student ID or missing required fields.";
+                $_SESSION['alert'] = "Error";
+                $_SESSION['status-code'] = "error";
+                header("Location: endorsement_form.php");
+                exit;
+            }
+
+            // Fetch student details
             $stmt = $conn->prepare("
-                INSERT INTO endorsements (first_name, middle_name, last_name, section, date_submitted, created_by)
-                VALUES (:first_name, :middle_name, :last_name, :section, :date_submitted, :created_by)
+                SELECT first_name, middle_name, last_name, stud_section 
+                FROM students_data 
+                WHERE id = :student_id
+            ");
+            $stmt->execute(['student_id' => $student_id]);
+            $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$student) {
+                error_log("Invalid student_id: $student_id");
+                $_SESSION['status'] = "Selected student not found.";
+                $_SESSION['alert'] = "Error";
+                $_SESSION['status-code'] = "error";
+                header("Location: endorsement_form.php");
+                exit;
+            }
+
+            // Insert endorsement
+            $stmt = $conn->prepare("
+                INSERT INTO endorsements (student_id, first_name, middle_name, last_name, section, date_submitted, created_by)
+                VALUES (:student_id, :first_name, :middle_name, :last_name, :section, :date_submitted, :created_by)
             ");
             $stmt->execute([
-                'first_name' => $_POST['first_name'],
-                'middle_name' => $_POST['middle_name'] ?: null,
-                'last_name' => $_POST['last_name'],
-                'section' => $_POST['section'],
-                'date_submitted' => $_POST['date_submitted'],
-                'created_by' => $_SESSION['auth_user']['userid']
+                'student_id' => $student_id,
+                'first_name' => $student['first_name'],
+                'middle_name' => $student['middle_name'] ?: null,
+                'last_name' => $student['last_name'],
+                'section' => $student['stud_section'],
+                'date_submitted' => $date_submitted,
+                'created_by' => $admin_id
             ]);
+
             $_SESSION['status'] = "Endorsement saved successfully.";
             $_SESSION['alert'] = "Success";
             $_SESSION['status-code'] = "success";
+            header("Location: endorsement.php");
+            exit;
+
         } elseif ($action === 'update') {
+            $id = filter_var($_POST['id'] ?? '', FILTER_VALIDATE_INT);
+            $student_id = filter_var($_POST['student_id'] ?? '', FILTER_VALIDATE_INT);
+            $date_submitted = $_POST['date_submitted'] ?? '';
+
+            error_log("Update endorsement: id=$id, student_id=$student_id, date_submitted=$date_submitted");
+
+            // Validate inputs
+            if (!$id || !$student_id || empty($date_submitted)) {
+                $_SESSION['status'] = "Invalid endorsement ID, student ID, or missing required fields.";
+                $_SESSION['alert'] = "Error";
+                $_SESSION['status-code'] = "error";
+                header("Location: endorsement_form.php?id=$id");
+                exit;
+            }
+
+            // Fetch student details
+            $stmt = $conn->prepare("
+                SELECT first_name, middle_name, last_name, stud_section 
+                FROM students_data 
+                WHERE id = :student_id
+            ");
+            $stmt->execute(['student_id' => $student_id]);
+            $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$student) {
+                error_log("Invalid student_id for update: $student_id");
+                $_SESSION['status'] = "Selected student not found.";
+                $_SESSION['alert'] = "Error";
+                $_SESSION['status-code'] = "error";
+                header("Location: endorsement_form.php?id=$id");
+                exit;
+            }
+
+            // Update endorsement
             $stmt = $conn->prepare("
                 UPDATE endorsements 
-                SET first_name = :first_name, 
+                SET student_id = :student_id, 
+                    first_name = :first_name, 
                     middle_name = :middle_name, 
                     last_name = :last_name, 
                     section = :section, 
@@ -40,22 +115,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 WHERE id = :id AND created_by = :created_by
             ");
             $stmt->execute([
-                'id' => $_POST['id'],
-                'first_name' => $_POST['first_name'],
-                'middle_name' => $_POST['middle_name'] ?: null,
-                'last_name' => $_POST['last_name'],
-                'section' => $_POST['section'],
-                'date_submitted' => $_POST['date_submitted'],
-                'created_by' => $_SESSION['auth_user']['userid']
+                'student_id' => $student_id,
+                'first_name' => $student['first_name'],
+                'middle_name' => $student['middle_name'] ?: null,
+                'last_name' => $student['last_name'],
+                'section' => $student['stud_section'],
+                'date_submitted' => $date_submitted,
+                'id' => $id,
+                'created_by' => $admin_id
             ]);
-            $_SESSION['status'] = "Endorsement updated successfully.";
-            $_SESSION['alert'] = "Success";
-            $_SESSION['status-code'] = "success";
+
+            if ($stmt->rowCount() > 0) {
+                $_SESSION['status'] = "Endorsement updated successfully.";
+                $_SESSION['alert'] = "Success";
+                $_SESSION['status-code'] = "success";
+            } else {
+                $_SESSION['status'] = "No changes made or you don't have permission to update this endorsement.";
+                $_SESSION['alert'] = "Error";
+                $_SESSION['status-code'] = "error";
+            }
+            header("Location: endorsement.php");
+            exit;
+
         } elseif ($action === 'delete') {
             $stmt = $conn->prepare("DELETE FROM endorsements WHERE id = :id AND created_by = :created_by");
             $stmt->execute([
                 'id' => $_POST['id'],
-                'created_by' => $_SESSION['auth_user']['userid']
+                'created_by' => $admin_id
             ]);
             if ($stmt->rowCount() > 0) {
                 echo json_encode(['success' => 'Endorsement deleted successfully']);
@@ -63,9 +149,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['error' => 'Endorsement not found or you don\'t have permission']);
             }
             exit;
+        } else {
+            $_SESSION['status'] = "Invalid action.";
+            $_SESSION['alert'] = "Error";
+            $_SESSION['status-code'] = "error";
+            header("Location: endorsement.php");
+            exit;
         }
     } catch (PDOException $e) {
-        error_log("Database error: " . $e->getMessage());
+        error_log("Database error in manage_endorsement.php: " . $e->getMessage());
         if ($action === 'delete') {
             echo json_encode(['error' => 'Failed to delete endorsement: ' . $e->getMessage()]);
             exit;
@@ -73,9 +165,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['status'] = "Failed to save endorsement: " . $e->getMessage();
             $_SESSION['alert'] = "Error";
             $_SESSION['status-code'] = "error";
+            header("Location: endorsement_form.php" . ($action === 'update' ? "?id=" . ($_POST['id'] ?? '') : ""));
+            exit;
         }
     }
 }
+
 header("Location: endorsement.php");
 exit;
 ?>

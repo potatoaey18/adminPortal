@@ -2,7 +2,7 @@
 include '../connection/config.php';
 session_start();
 
-$adminID = $_SESSION['auth_user']['userid'] ?? null;
+$adminID = $_SESSION['auth_user']['admin_id'] ?? null;
 if (!$adminID) {
     header('Location: index.php');
     exit;
@@ -266,7 +266,7 @@ if (isset($_POST['deleteCourseSection'])) {
             $date = date('F / d l / Y');
             $time = date('g:i A');
             $logs = "Deleted course $course with section $section.";
-            $stmt = $conn->prepare("INSERT INTO admin_notification(userid, logs, logs_date, logs_time) VALUES (?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO admin_notification(admin_id, logs, logs_date, logs_time) VALUES (?, ?, ?, ?)");
             $stmt->execute([$adminID, $logs, $date, $time]);
 
             $conn->commit();

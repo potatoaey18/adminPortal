@@ -3,12 +3,12 @@ include '../connection/config.php';
 session_start();
 
 // Check if admin is logged in
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     header("Location: index.php");
     exit;
 }
 
-$userid = $_SESSION['auth_user']['userid'];
+$admin_id = $_SESSION['auth_user']['admin_id'];
 $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 $action = $id ? 'update_meeting' : 'create_meeting';
 $portal = filter_input(INPUT_GET, 'portal', FILTER_SANITIZE_STRING);
@@ -23,7 +23,7 @@ $agenda = '';
 
 if ($id) {
     $stmt = $conn->prepare("SELECT meeting_type, link, passcode, meeting_date, meeting_time, agenda, portal FROM meetings WHERE id = ? AND created_by = ?");
-    $stmt->execute([$id, $userid]);
+    $stmt->execute([$id, $admin_id]);
     $data = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($data) {
         $meeting_type = $data['meeting_type'];

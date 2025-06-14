@@ -3,7 +3,7 @@ include '../connection/config.php';
 session_start();
 
 // Check if admin is logged in
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     $_SESSION['status'] = "Unauthorized access.";
     $_SESSION['alert'] = "Error";
     $_SESSION['status-code'] = "error";
@@ -11,7 +11,7 @@ if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid']
     exit;
 }
 
-$userid = $_SESSION['auth_user']['userid'];
+$admin_id = $_SESSION['auth_user']['admin_id'];
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 try {
@@ -21,7 +21,7 @@ try {
         $portal = filter_input(INPUT_POST, 'portal', FILTER_SANITIZE_STRING);
         if ($title && $content && in_array($portal, ['Student', 'Adviser', 'HTE', 'All'])) {
             $stmt = $conn->prepare("INSERT INTO announcements (title, content, portal, created_by) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$title, $content, $portal, $userid]);
+            $stmt->execute([$title, $content, $portal, $admin_id]);
             $_SESSION['status'] = "Announcement created successfully!";
             $_SESSION['alert'] = "Success";
             $_SESSION['status-code'] = "success";
@@ -37,7 +37,7 @@ try {
         $portal = filter_input(INPUT_POST, 'portal', FILTER_SANITIZE_STRING);
         if ($id && $title && $content && in_array($portal, ['Student', 'Adviser', 'HTE', 'All'])) {
             $stmt = $conn->prepare("UPDATE announcements SET title = ?, content = ?, portal = ? WHERE id = ? AND created_by = ?");
-            $stmt->execute([$title, $content, $portal, $id, $userid]);
+            $stmt->execute([$title, $content, $portal, $id, $admin_id]);
             $_SESSION['status'] = "Announcement updated successfully!";
             $_SESSION['alert'] = "Success";
             $_SESSION['status-code'] = "success";
@@ -65,7 +65,7 @@ try {
         $portal = filter_input(INPUT_POST, 'portal', FILTER_SANITIZE_STRING);
         if ($question && $answer && in_array($portal, ['Student', 'Adviser', 'HTE', 'All'])) {
             $stmt = $conn->prepare("INSERT INTO faqs (question, answer, portal, created_by) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$question, $answer, $portal, $userid]);
+            $stmt->execute([$question, $answer, $portal, $admin_id]);
             $_SESSION['status'] = "FAQ created successfully!";
             $_SESSION['alert'] = "Success";
             $_SESSION['status-code'] = "success";
@@ -81,7 +81,7 @@ try {
         $portal = filter_input(INPUT_POST, 'portal', FILTER_SANITIZE_STRING);
         if ($id && $question && $answer && in_array($portal, ['Student', 'Adviser', 'HTE', 'All'])) {
             $stmt = $conn->prepare("UPDATE faqs SET question = ?, answer = ?, portal = ? WHERE id = ? AND created_by = ?");
-            $stmt->execute([$question, $answer, $portal, $id, $userid]);
+            $stmt->execute([$question, $answer, $portal, $id, $admin_id]);
             $_SESSION['status'] = "FAQ updated successfully!";
             $_SESSION['alert'] = "Success";
             $_SESSION['status-code'] = "success";

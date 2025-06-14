@@ -1,7 +1,7 @@
 <?php
 include '../connection/config.php';
 
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     $_SESSION['status'] = "Unauthorized access.";
     $_SESSION['alert'] = "Error";
     $_SESSION['status-code'] = "error";

@@ -4,7 +4,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 session_start();
-if ($_SESSION['auth_user']['userid'] == 0) {
+if ($_SESSION['auth_user']['admin_id'] == 0) {
     echo "<script>window.location.href='index.php'</script>";
 }
 ?>
@@ -238,10 +238,10 @@ if ($_SESSION['auth_user']['userid'] == 0) {
                             return $colors[$letter] ?? $colors['default'];
                         }
 
-                        if (isset($_SESSION['auth_user']['userid'])) {
-                            $adminId = $_SESSION['auth_user']['userid'];
+                        if (isset($_SESSION['auth_user']['admin_id'])) {
+                            $adminId = $_SESSION['auth_user']['admin_id'];
 
-                            // Get all notifications (no userid filter since it's not in the table)
+                            // Get all notifications (no admin_id filter since it's not in the table)
                             try {
                                 $stmt = $conn->prepare("SELECT system_notification.*, admin_account.admin_profile_picture 
                                                         FROM system_notification 

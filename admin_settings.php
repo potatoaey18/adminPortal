@@ -5,13 +5,13 @@ error_reporting(E_ALL & ~E_NOTICE); // Show all errors except notices
 session_start();
 
 // Redirect if not authenticated
-if (!isset($_SESSION['auth_user']['userid']) || $_SESSION['auth_user']['userid'] == 0) {
+if (!isset($_SESSION['auth_user']['admin_id']) || $_SESSION['auth_user']['admin_id'] == 0) {
     header('Location: index.php');
     exit;
 }
 
 // Get admin data
-$adminID = $_SESSION['auth_user']['userid'];
+$adminID = $_SESSION['auth_user']['admin_id'];
 try {
     $stmt = $conn->prepare("SELECT * FROM admin_account WHERE id = ?");
     $stmt->execute([$adminID]);

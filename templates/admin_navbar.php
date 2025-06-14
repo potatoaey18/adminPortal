@@ -273,8 +273,8 @@
             <div class="header-icon">
                 <div class="avatar-trigger" data-toggle="dropdown">
                     <?php
-                    if (isset($_SESSION['auth_user']['userid'])) {
-                        $adminID = $_SESSION['auth_user']['userid'];
+                    if (isset($_SESSION['auth_user']['admin_id'])) {
+                        $adminID = $_SESSION['auth_user']['admin_id'];
                         $stmt = $conn->prepare("SELECT first_name, last_name, id_number, admin_profile_picture FROM admin_account WHERE id = ?");
                         $stmt->execute([$adminID]);
                         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -421,7 +421,7 @@
     </script>
 
     <script>
-        var userId = <?php echo $_SESSION['auth_user']['userid']; ?>;
+        var admin_id = <?php echo $_SESSION['auth_user']['admin_id']; ?>;
         var logoutTimeout;
 
         function startLogoutTimer() {
@@ -429,7 +429,7 @@
                 $.ajax({
                     type: 'POST',
                     url: 'admin_update_status_AutoLogOut.php',
-                    data: { userId: userId },
+                    data: { admin_id: admin_id },
                     success: function (response) {
                         window.location.href = 'index.php';
                     },
