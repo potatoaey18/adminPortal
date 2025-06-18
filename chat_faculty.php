@@ -20,7 +20,7 @@ if (!isset($_SESSION['auth_user']['admin_id'])) {
 
     <title>OJT Web Portal: Chats</title>
     <!-- ================= Favicon ================== -->
-    <link rel="shortcut icon" href="images/pupLogo.png">
+    <link rel="shortcut icon" href="images/Picture1.png">
     <link rel="apple-touch-icon" sizes="144x144" href="http://placehold.it/144.png/000/fff">
     <link rel="apple-touch-icon" sizes="114x114" href="http://placehold.it/114.png/000/fff">
     <link rel="apple-touch-icon" sizes="72x72" href="http://placehold.it/72.png/000/fff">

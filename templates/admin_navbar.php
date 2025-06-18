@@ -337,11 +337,10 @@
                     <li><a href="notification.php" class="<?php echo ($current_page === 'notification.php') ? 'active' : ''; ?>"><img src="images/notification.png" alt="Notifications Icon"> Notifications</a></li>
                     <li class="dropdown">
                         <a href="#" class="dropdown-toggle"><img src="images/message.png" alt="Messages Icon"> Messages</a>
-                        <div class="dropdown-content" <?php echo (in_array($current_page, ['stud_message.php', 'chat_supervisor.php', 'chat_faculty.php', 'chat_admin.php'])) ? 'style="display: block;"' : ''; ?>>
-                            <a href="stud_message.php" class="<?php echo ($current_page === 'stud_message.php') ? 'active' : ''; ?>"><img src="images/student.png" alt="Student Icon"> Student</a>
-                            <a href="chat_supervisor.php" class="<?php echo ($current_page === 'chat_supervisor.php') ? 'active' : ''; ?>"><img src="images/faculty.png" alt="Faculty Icon"> Faculty</a>
-                            <a href="chat_faculty.php" class="<?php echo ($current_page === 'chat_faculty.php') ? 'active' : ''; ?>"><img src="images/supervisor.png" alt="Supervisor Icon"> Supervisor</a>
-                            <a href="chat_admin.php" class="<?php echo ($current_page === 'chat_admin.php') ? 'active' : ''; ?>"><img src="images/admin.png" alt="Admin Icon"> Admin</a>
+                        <div class="dropdown-content" <?php echo (in_array($current_page, ['message_student.php', 'message_supervisor.php', 'message_faculty.php'])) ? 'style="display: block;"' : ''; ?>>
+                            <a href="message_student.php" class="<?php echo ($current_page === 'message_student.php') ? 'active' : ''; ?>"><img src="images/student.png" alt="Student Icon"> Student</a>
+                            <a href="message_supervisor.php" class="<?php echo ($current_page === 'message_supervisor.php') ? 'active' : ''; ?>"><img src="images/faculty.png" alt="Faculty Icon"> Faculty</a>
+                            <a href="message_faculty.php" class="<?php echo ($current_page === 'message_faculty.php') ? 'active' : ''; ?>"><img src="images/supervisor.png" alt="Supervisor Icon"> Supervisor</a>
                         </div>
                     </li>
                     <li class="dropdown">
